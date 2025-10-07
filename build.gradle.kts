@@ -4,19 +4,22 @@ plugins {
     id("io.spring.dependency-management") version "1.1.6"
 }
 
-group = "com.example"
+group = "app.chelsea"
 version = "0.0.1-SNAPSHOT"
-java.sourceCompatibility = JavaVersion.VERSION_21
+java {
+    toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
+}
 
 repositories { mavenCentral() }
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-web-services")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.glassfish.jaxb:jaxb-runtime:4.0.5")
-    runtimeOnly("org.postgresql:postgresql:42.7.4")
+
+    // If you plan to add JPA later, you can re-enable these:
+    // implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    // runtimeOnly("org.postgresql:postgresql:42.7.4")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
