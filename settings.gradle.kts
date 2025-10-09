@@ -1,1 +1,8 @@
-rootProject.name = "chelsea-pl-tracker"
+rootProject.name = "pl-tracker"
+
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}

@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16
+    container_name: pl_db
+    environment:
+      POSTGRES_USER: pl_user
+      POSTGRES_PASSWORD: pl_pass
+      POSTGRES_DB: pl_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      # any .sql in this folder runs automatically at first start
+      - ./initdb:/docker-entrypoint-initdb.d
+
+  adminer:
+    image: adminer
+    container_name: pl_adminer
+    ports:
+      - "8081:8080"
+
+volumes:
+  dbdata:
