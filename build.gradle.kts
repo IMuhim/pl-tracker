@@ -1,7 +1,7 @@
 plugins {
-    id("java")
-    id("org.springframework.boot") version "3.3.4"
-    id("io.spring.dependency-management") version "1.1.6"
+  id("java")
+  id("org.springframework.boot") version "3.3.4"
+  id("io.spring.dependency-management") version "1.1.6"
 }
 
 group = "app.premierleague"
@@ -13,18 +13,14 @@ java {
   }
 }
 
-repositories {
-    mavenCentral()
-}
+repositories { mavenCentral() }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.glassfish.jaxb:jaxb-runtime:4.0.5")
-
-    runtimeOnly("org.postgresql:postgresql:42.7.4")
-
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
+  implementation("org.springframework.boot:spring-boot-starter-web")
+  implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+  implementation("org.glassfish.jaxb:jaxb-runtime:4.0.5")
+  runtimeOnly("org.postgresql:postgresql:42.7.4")
+  testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
 tasks.test { useJUnitPlatform() }
