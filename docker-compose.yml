@@ -10,7 +10,6 @@ services:
       - "5432:5432"
     volumes:
       - dbdata:/var/lib/postgresql/data
-      # any .sql in this folder runs automatically at first start
       - ./initdb:/docker-entrypoint-initdb.d
 
   adminer:

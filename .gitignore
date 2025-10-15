@@ -23,3 +23,11 @@ Thumbs.db
 # Local env & secrets (keep out of git!)
 .env
 application-local.yml
+
+# Java build outputs (VS Code/Eclipse)
+bin/
+out/
+.classpath
+.project
+.settings/
+

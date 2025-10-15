@@ -18,16 +18,19 @@ INSERT INTO teams (name, short_name, city) VALUES
  ('Southampton',             'SOU', 'Southampton'),
  ('Tottenham Hotspur',       'TOT', 'London'),
  ('West Ham United',         'WHU', 'London'),
- ('Wolverhampton Wanderers', 'WOL', 'Wolverhampton');
+ ('Wolverhampton Wanderers', 'WOL', 'Wolverhampton')
+ON CONFLICT DO NOTHING
+@@
 
-TRUNCATE TABLE matches RESTART IDENTITY;
+TRUNCATE TABLE matches RESTART IDENTITY
+@@
 
-DO $$
+DO $do$
 DECLARE
   team_ids   int[];
   n          int;
-  rounds     int;   -- n - 1
-  half       int;   -- n / 2
+  rounds     int;
+  half       int;
   r          int;
   i          int;
 
@@ -61,6 +64,7 @@ BEGIN
   left_ids  := team_ids[1:half];
   right_ids := team_ids[half+1:n];
 
+  -- first half
   FOR r IN 0..(rounds-1) LOOP
     slot_idx := 1;
     matchweek_start := season_start + (r * interval '7 days');
@@ -87,7 +91,6 @@ BEGIN
     IF half > 1 THEN
       tmp := left_ids[2];
       left_ids[2] := right_ids[1];
-
       FOR i IN 1..(half-1) LOOP
         right_ids[i] := right_ids[i+1];
       END LOOP;
@@ -95,6 +98,7 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- second half (reverse home/away)
   left_ids  := team_ids[1:half];
   right_ids := team_ids[half+1:n];
 
@@ -132,4 +136,6 @@ BEGIN
   END LOOP;
 
   RAISE NOTICE 'Fixtures generated: % matches', (SELECT count(*) FROM matches);
-END $$;
+END
+$do$ LANGUAGE plpgsql
+@@

@@ -5,9 +5,15 @@ spring:
     password: pl_pass
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
+    open-in-view: false
     properties:
-      hibernate:
-        format_sql: true
+      hibernate.format_sql: true
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:01_schema.sql
+      data-locations: classpath:02_seed.sql
+      separator: "@@"
 server:
   port: 8080
