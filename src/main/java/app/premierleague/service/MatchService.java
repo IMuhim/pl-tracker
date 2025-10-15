@@ -22,8 +22,6 @@ public class MatchService {
     Match m = matchRepo.findById(matchId)
         .orElseThrow(() -> new IllegalArgumentException("Match not found: " + matchId));
     if ("FT".equals(m.getStatus())) {
-      // allow overwrite if you want — otherwise block
-      // throw new IllegalStateException("Match already final");
     }
     m.setHomeGoals(homeGoals);
     m.setAwayGoals(awayGoals);
