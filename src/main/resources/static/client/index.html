@@ -3,87 +3,58 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PL Tracker – Standings & Results</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>PL Tracker</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="container">
-    <header class="header">
-      <div>
-        <h1 class="title">PL Tracker <span class="muted">— Standings & Results</span></h1>
-        <div class="tiny">Point rules: Win 3 • Draw 1 • Loss 0</div>
+  <main class="container">
+    <!-- League Table -->
+    <section class="card">
+      <h2>Table</h2>
+      <div class="table-wrap">
+        <table id="standingsTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Team</th>
+              <th class="right">P</th>
+              <th class="right">W</th>
+              <th class="right">D</th>
+              <th class="right">L</th>
+              <th class="right">GF</th>
+              <th class="right">GA</th>
+              <th class="right">GD</th>
+              <th class="right">Pts</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
-      <div class="toolbar">
-        <label class="chip">
-          API base
-          <input id="baseUrl" placeholder="http://localhost:8080" value="http://localhost:8080" />
-        </label>
-        <button id="refreshBtn">Refresh</button>
-        <button id="autoBtn" class="pill">Auto-refresh: Off</button>
-      </div>
-    </header>
-
-    <section class="grid">
-      <article class="card" id="standingsCard">
-        <h2 class="card-title">Standings</h2>
-        <div class="content">
-          <div class="toolbar mb-8">
-            <label class="chip">Sort by
-              <select id="sortBy">
-                <option value="points-gd-gs">Points, GD, GF</option>
-                <option value="name">Team A–Z</option>
-              </select>
-            </label>
-            <span id="standingsMsg" class="tiny"></span>
-          </div>
-          <div class="table-wrap">
-            <table id="standingsTable">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Team</th>
-                  <th class="right">P</th>
-                  <th class="right">W</th>
-                  <th class="right">D</th>
-                  <th class="right">L</th>
-                  <th class="right">GF</th>
-                  <th class="right">GA</th>
-                  <th class="right">GD</th>
-                  <th class="right">Pts</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-      </article>
-
-      <article class="card">
-        <h2 class="card-title">Match Results</h2>
-        <div class="content">
-          <div class="toolbar mb-8">
-            <label class="chip">Team
-              <select id="teamFilter"><option value="">All teams</option></select>
-            </label>
-            <label class="chip">Status
-              <select id="statusFilter">
-                <option value="">Any</option>
-                <option value="FT">Finished</option>
-                <option value="LIVE">Live</option>
-                <option value="SCHEDULED">Scheduled</option>
-                <option value="POSTPONED">Postponed</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </label>
-          </div>
-          <div id="resultsList"></div>
-        </div>
-      </article>
     </section>
 
-    <footer class="footer tiny">Tip: If your backend doesn't expose <code>/standings</code>, this page will compute the table from <code>/matches</code> automatically.</footer>
-  </div>
+    <!-- Team Games: opponent, score, won? -->
+    <section class="card">
+      <div class="row-head">
+        <h2>Team Games</h2>
+        <select id="teamSelect"></select>
+      </div>
+      <div class="table-wrap">
+        <table id="gamesTable">
+          <thead>
+            <tr>
+              <th>Opponent</th>
+              <th class="right">Score</th>
+              <th class="right">Result</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
 
-  <script src="index.js"></script>
+    <p id="msg" class="msg"></p>
+  </main>
+
+  <script src="./index.js" defer></script>
 </body>
 </html>

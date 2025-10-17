@@ -1,55 +1,29 @@
 const els = {
-  baseUrl: null,
-  refreshBtn: null,
-  autoBtn: null,
-  standingsMsg: null,
-  standingsTable: null,
-  sortBy: null,
-  resultsList: null,
-  teamFilter: null,
-  statusFilter: null
+  standingsBody: null,
+  gamesBody: null,
+  teamSelect: null,
+  msg: null
 };
 
-let autoTimer = null;
-
-function bindEls(){
-  els.baseUrl = document.getElementById('baseUrl');
-  els.refreshBtn = document.getElementById('refreshBtn');
-  els.autoBtn = document.getElementById('autoBtn');
-  els.standingsMsg = document.getElementById('standingsMsg');
-  els.standingsTable = document.querySelector('#standingsTable tbody');
-  els.sortBy = document.getElementById('sortBy');
-  els.resultsList = document.getElementById('resultsList');
-  els.teamFilter = document.getElementById('teamFilter');
-  els.statusFilter = document.getElementById('statusFilter');
+function api(path){
+  const base = window.location.origin;
+  const clean = path.startsWith('/') ? path : '/' + path;
+  return base + clean;
 }
-
-function api(base, path){
-  const cleanBase = base.replace(/\/$/, '');
-  const cleanPath = path.startsWith('/') ? path : '/' + path;
-  return `${cleanBase}${cleanPath}`;
+async function jget(path){
+  const r = await fetch(api(path));
+  if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
 }
-
-async function getJSON(url){
-  const res = await fetch(url);
-  if(!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json();
-}
-
-function guessTeamsEndpoint(){ return '/teams'; }
-function guessMatchesEndpoint(){ return '/matches'; }
-function guessStandingsEndpoint(){ return '/table'; }
 
 function buildTeamMap(teams){
-  const map = new Map();
+  const m = new Map();
   for(const t of teams){
-    const id = t.id ?? t.teamId ?? t.team_id;
-    map.set(String(id), {
-      id: String(id),
-      name: t.name ?? t.teamName ?? t.short_name ?? t.shortName ?? `Team ${id}`
-    });
+    const id = String(t.id ?? t.teamId ?? t.team_id);
+    const name = t.name ?? t.teamName ?? t.short_name ?? t.shortName ?? `Team ${id}`;
+    m.set(id, name);
   }
-  return map;
+  return m;
 }
 
 function normalizeMatch(m){
@@ -59,27 +33,21 @@ function normalizeMatch(m){
     awayId: String(m.awayTeamId ?? m.away_team_id ?? m.awayId),
     homeGoals: Number(m.homeGoals ?? m.home_goals ?? 0),
     awayGoals: Number(m.awayGoals ?? m.away_goals ?? 0),
-    status: (m.status ?? 'SCHEDULED').toUpperCase(),
+    status: String(m.status ?? 'SCHEDULED').trim().toUpperCase(),
     kickoff: m.kickoff ?? m.kickoff_at ?? m.date
   };
 }
 
-function resultFor(match){
-  if(match.status !== 'FT' && match.status !== 'LIVE') return { type: 'pending' };
-  if(match.homeGoals > match.awayGoals) return { type: 'home' };
-  if(match.homeGoals < match.awayGoals) return { type: 'away' };
-  return { type: 'draw' };
-}
-
 function computeStandings(matches, teamMap){
   const table = new Map();
-  for(const [,team] of teamMap) table.set(team.id, { teamId: team.id, team: team.name, p:0,w:0,d:0,l:0,gf:0,ga:0,gd:0,pts:0 });
+  for(const [id,name] of teamMap){
+    table.set(id, { teamId:id, team:name, p:0,w:0,d:0,l:0,gf:0,ga:0,gd:0,pts:0 });
+  }
   for(const raw of matches){
     const m = normalizeMatch(raw);
-    if(!(m.homeId && m.awayId)) continue;
-    const home = table.get(m.homeId); const away = table.get(m.awayId);
+    if(m.status !== 'FT') continue;
+    const home = table.get(m.homeId), away = table.get(m.awayId);
     if(!home || !away) continue;
-    if(m.status !== 'FT') continue; // only finished in table
 
     home.p++; away.p++;
     home.gf += m.homeGoals; home.ga += m.awayGoals;
@@ -88,39 +56,17 @@ function computeStandings(matches, teamMap){
 
     if(m.homeGoals > m.awayGoals){ home.w++; away.l++; home.pts += 3; }
     else if(m.homeGoals < m.awayGoals){ away.w++; home.l++; away.pts += 3; }
-    else { home.d++; away.d++; home.pts += 1; away.pts += 1; }
+    else { home.d++; away.d++; home.pts++; away.pts++; }
   }
-  return Array.from(table.values());
-}
-
-function normalizeStandingsFromAPI(rows, teamMap){
-  return rows.map(r => {
-    const id = String(r.teamId ?? r.team_id ?? r.id);
-    const name = r.team ?? r.name ?? teamMap.get(id)?.name ?? `Team ${id}`;
-    const p = r.p ?? r.played ?? r.playedGames ?? r.P ?? 0;
-    const w = r.w ?? r.won ?? r.W ?? 0;
-    const d = r.d ?? r.draw ?? r.D ?? 0;
-    const l = r.l ?? r.lost ?? r.L ?? 0;
-    const gf = r.gf ?? r.goalsFor ?? r.F ?? 0;
-    const ga = r.ga ?? r.goalsAgainst ?? r.A ?? 0;
-    const gd = r.gd ?? r.goalDifference ?? r.GD ?? (gf - ga);
-    const pts = r.pts ?? r.points ?? r.Pts ?? 0;
-    return { teamId: id, team: name, p, w, d, l, gf, ga, gd, pts };
-  });
+  return Array.from(table.values())
+    .sort((a,b)=> b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team));
 }
 
 function renderStandings(rows){
-  const key = els.sortBy.value;
-  const sorted = [...rows];
-  if(key === 'points-gd-gs'){
-    sorted.sort((a,b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team));
-  } else {
-    sorted.sort((a,b) => a.team.localeCompare(b.team));
-  }
-  els.standingsTable.innerHTML = sorted.map((r,i)=>`
+  els.standingsBody.innerHTML = rows.map((r,i)=>`
     <tr>
       <td class="mono">${i+1}</td>
-      <td>${escapeHtml(r.team)}</td>
+      <td>${esc(r.team)}</td>
       <td class="right mono">${r.p}</td>
       <td class="right mono">${r.w}</td>
       <td class="right mono">${r.d}</td>
@@ -133,101 +79,91 @@ function renderStandings(rows){
   `).join('');
 }
 
-function renderResults(matches, teamMap){
-  const teamSel = els.teamFilter.value;
-  const statusSel = els.statusFilter.value;
-  const items = matches.map(m => normalizeMatch(m)).filter(m => {
-    const teamOk = !teamSel || m.homeId === teamSel || m.awayId === teamSel;
-    const statusOk = !statusSel || m.status === statusSel;
-    return teamOk && statusOk;
-  }).sort((a,b)=> new Date(b.kickoff) - new Date(a.kickoff));
+function gameRow(teamId, m, teamMap){
+  const isHome = m.homeId === teamId;
+  const opponentId = isHome ? m.awayId : m.homeId;
+  const opponent = teamMap.get(opponentId) ?? `Team ${opponentId}`;
+  const teamGoals = isHome ? m.homeGoals : m.awayGoals;
+  const oppGoals  = isHome ? m.awayGoals : m.homeGoals;
+  const score = `${teamGoals} - ${oppGoals}`;
 
-  els.resultsList.innerHTML = items.map(m => {
-    const home = teamMap.get(m.homeId)?.name ?? `Home ${m.homeId}`;
-    const away = teamMap.get(m.awayId)?.name ?? `Away ${m.awayId}`;
-    const r = resultFor(m);
-    let label = '<span class="badge">'+m.status+'</span>';
-    if(r.type === 'home') label = `<span class="badge winner">Home win</span>`;
-    else if(r.type === 'away') label = `<span class="badge winner">Away win</span>`;
-    else if(r.type === 'draw') label = `<span class="badge draw">Draw</span>`;
-    const date = m.kickoff ? new Date(m.kickoff) : null;
-    const when = date ? date.toLocaleString() : '';
-    return `
-    <div class="row">
-      <div class="teams">
-        ${label}
-        <strong>${escapeHtml(home)}</strong>
-        <span class="muted">vs</span>
-        <strong>${escapeHtml(away)}</strong>
-      </div>
-      <div class="mono score">${m.homeGoals} - ${m.awayGoals}</div>
-      <div class="tiny full">${when ? when : ''}</div>
-    </div>`;
-  }).join('');
+  let result = '—';
+  if (m.status === 'FT') {
+    if (teamGoals > oppGoals) result = 'Win';
+    else if (teamGoals < oppGoals) result = 'Loss';
+    else result = 'Draw';
+  }
+
+  return `
+    <tr>
+      <td>${esc(opponent)}</td>
+      <td class="right mono">${score}</td>
+      <td class="right">${result}</td>
+    </tr>
+  `;
 }
 
-function populateTeamFilter(teams){
-  const opts = teams.map(t => ({ id: String(t.id ?? t.teamId ?? t.team_id), name: t.name ?? t.teamName ?? t.short_name ?? t.shortName }))
-    .sort((a,b)=> a.name.localeCompare(b.name))
-    .map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
-  const current = els.teamFilter.value;
-  els.teamFilter.innerHTML = `<option value="">All teams</option>` + opts;
-  if(current) els.teamFilter.value = current;
+function renderTeamGames(teamId, matches, teamMap){
+  const items = matches.map(normalizeMatch)
+    .filter(m => m.homeId === teamId || m.awayId === teamId)
+    .sort((a,b)=> new Date(a.kickoff) - new Date(b.kickoff));
+  els.gamesBody.innerHTML = items.map(m => gameRow(teamId, m, teamMap)).join('');
 }
 
-function escapeHtml(str){
-  return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s]));
+function esc(s){
+  return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[ch]));
 }
 
-async function loadData(){
-  const base = els.baseUrl.value.trim();
-  els.standingsMsg.textContent = 'Loading…';
+async function main(){
+  els.standingsBody = document.querySelector('#standingsTable tbody');
+  els.gamesBody     = document.querySelector('#gamesTable tbody');
+  els.teamSelect    = document.getElementById('teamSelect');
+  els.msg           = document.getElementById('msg');
+
   try {
     const [teams, matches] = await Promise.all([
-      getJSON(api(base, guessTeamsEndpoint(base))),
-      getJSON(api(base, guessMatchesEndpoint(base)))
+      jget('/teams'),
+      jget('/matches')
     ]);
     const teamMap = buildTeamMap(teams);
-    populateTeamFilter(teams);
+
+    const sortedTeams = [...teamMap.entries()].map(([id,name]) => ({id, name}))
+      .sort((a,b)=> a.name.localeCompare(b.name));
+    els.teamSelect.innerHTML = sortedTeams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
 
     let standings;
     try {
-      standings = await getJSON(api(base, guessStandingsEndpoint(base)));
-      standings = normalizeStandingsFromAPI(standings, teamMap);
-      els.standingsMsg.textContent = 'Using /standings from API';
-    } catch(e){
-      const normMatches = matches.map(m => normalizeMatch(m));
-      standings = computeStandings(normMatches, teamMap);
-      els.standingsMsg.textContent = 'Computed from /matches';
+      const apiRows = await jget('/table');
+      standings = apiRows.map(r => ({
+        teamId: String(r.teamId ?? r.team_id ?? r.id),
+        team:   r.team ?? r.name ?? teamMap.get(String(r.teamId ?? r.team_id ?? r.id)) ?? 'Team',
+        p:  r.p   ?? r.played        ?? r.playedGames ?? 0,
+        w:  r.w   ?? r.won           ?? 0,
+        d:  r.d   ?? r.draw          ?? 0,
+        l:  r.l   ?? r.lost          ?? 0,
+        gf: r.gf  ?? r.goalsFor      ?? 0,
+        ga: r.ga  ?? r.goalsAgainst  ?? 0,
+        gd: r.gd  ?? ((r.gf ?? 0) - (r.ga ?? 0)),
+        pts:r.pts ?? r.points        ?? 0
+      }));
+    } catch {
+      standings = computeStandings(matches, teamMap);
     }
-
     renderStandings(standings);
-    renderResults(matches, teamMap);
-  } catch (err){
-    console.error(err);
-    els.standingsMsg.innerHTML = `<span class="error">${err.message}. Check your API base & CORS.</span>`;
-    els.standingsTable.innerHTML = '';
-    els.resultsList.innerHTML = '';
+
+    const initialTeamId = sortedTeams[0]?.id;
+    if (initialTeamId) {
+      els.teamSelect.value = initialTeamId;
+      renderTeamGames(initialTeamId, matches, teamMap);
+    }
+    els.teamSelect.addEventListener('change', () => {
+      renderTeamGames(els.teamSelect.value, matches, teamMap);
+    });
+
+  } catch (e){
+    console.error(e);
+    els.msg.textContent = 'Failed to load data.';
   }
 }
 
-function setupEvents(){
-  els.refreshBtn.addEventListener('click', loadData);
-  els.sortBy.addEventListener('change', () => renderStandings(window.__lastStandings || []));
-  els.teamFilter.addEventListener('change', () => loadData());
-  els.statusFilter.addEventListener('change', () => loadData());
-  els.autoBtn.addEventListener('click', () => {
-    if(autoTimer){ clearInterval(autoTimer); autoTimer = null; els.autoBtn.textContent = 'Auto-refresh: Off'; return; }
-    autoTimer = setInterval(loadData, 8000);
-    els.autoBtn.textContent = 'Auto-refresh: On';
-  });
-}
-
-const _renderStandings = renderStandings;
-renderStandings = function(rows){ window.__lastStandings = rows; _renderStandings(rows); };
-
-window.addEventListener('DOMContentLoaded', () => {
-  bindEls();
-  setupEvents();
-  loadData();
-});
+window.addEventListener('DOMContentLoaded', main);
