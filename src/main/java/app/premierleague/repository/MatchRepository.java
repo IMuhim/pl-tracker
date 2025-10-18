@@ -8,4 +8,7 @@ import java.util.List;
 public interface MatchRepository extends JpaRepository<Match, Long> {
   List<Match> findAllByOrderByKickoffAsc();
   List<Match> findByStatusOrderByKickoffAsc(String status);
+
+  // --- added for SOAP getMatchRequest by homeTeamId ---
+  List<Match> findByHomeTeamIdOrderByKickoffAsc(Integer homeTeamId);
 }

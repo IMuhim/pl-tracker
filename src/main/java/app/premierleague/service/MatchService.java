@@ -6,6 +6,9 @@ import jakarta.transaction.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
+
 @Service
 public class MatchService {
 
@@ -17,23 +20,58 @@ public class MatchService {
     this.jdbc = jdbc;
   }
 
-@Transactional
-public Match recordResult(long matchId, int homeGoals, int awayGoals) {
-  if (homeGoals < 0 || awayGoals < 0) throw new IllegalArgumentException("Scores must be ≥ 0");
+  // === NEW: called by SOAP createMatchRequest ===
+  @Transactional
+  public Match saveFromSoap(long homeTeamId,
+                            long awayTeamId,
+                            OffsetDateTime kickoff,
+                            String venue,
+                            int homeGoals,
+                            int awayGoals,
+                            String status) {
 
-  Match m = matchRepo.findById(matchId)
-      .orElseThrow(() -> new IllegalArgumentException("Match not found: " + matchId));
+    Match m = new Match();
+    m.setHomeTeamId((int) homeTeamId);  // entity uses Integer
+    m.setAwayTeamId((int) awayTeamId);
+    // entity uses Instant; SOAP gives dateTime -> mapped by endpoint to OffsetDateTime
+    m.setKickoff(kickoff.toInstant());
+    m.setVenue(venue);
+    m.setHomeGoals(homeGoals);
+    m.setAwayGoals(awayGoals);
+    m.setStatus(status == null ? "SCHEDULED" : status);
 
-  m.setHomeGoals(homeGoals);
-  m.setAwayGoals(awayGoals);
-  m.setStatus("FT");
+    Match saved = matchRepo.saveAndFlush(m);
 
-  matchRepo.saveAndFlush(m);
+    // If you only want standings after FT, guard this:
+    if ("FT".equalsIgnoreCase(saved.getStatus())) {
+      recomputeStandings();
+    }
+    return saved;
+  }
 
-  recomputeStandings();
-  return m;
-}
+  // === OPTIONAL: if your SOAP getMatchRequest queries by homeTeamId ===
+  @Transactional
+  public java.util.List<Match> findByHomeTeamId(long homeTeamId) {
+    return matchRepo.findByHomeTeamIdOrderByKickoffAsc((int) homeTeamId);
+  }
 
+  // === EXISTING ===
+  @Transactional
+  public Match recordResult(long matchId, int homeGoals, int awayGoals) {
+    if (homeGoals < 0 || awayGoals < 0) throw new IllegalArgumentException("Scores must be ≥ 0");
+
+    Match m = matchRepo.findById(matchId)
+        .orElseThrow(() -> new IllegalArgumentException("Match not found: " + matchId));
+
+    m.setHomeGoals(homeGoals);
+    m.setAwayGoals(awayGoals);
+    m.setStatus("FT");
+
+    matchRepo.saveAndFlush(m);
+
+    recomputeStandings();
+    return m;
+  }
 
   @Transactional
   public void recomputeStandings() {
