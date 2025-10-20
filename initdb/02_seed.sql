@@ -24,118 +24,99 @@ ON CONFLICT DO NOTHING
 
 TRUNCATE TABLE matches RESTART IDENTITY
 @@
+SET TIME ZONE 'UTC'
+@@
 
 DO $do$
 DECLARE
-  team_ids   int[];
-  n          int;
-  rounds     int;
-  half       int;
-  r          int;
-  i          int;
+  team_ids int[];
+  a int[];
+  n int;
+  half int;
+  r int;
+  i int;
 
-  left_ids   int[];
-  right_ids  int[];
+  season_start timestamptz := timestamptz '2025-08-09 12:30:00+00';
+  mw_start  timestamptz;
+  mw_start2 timestamptz;
 
-  season_start timestamp := timestamp '2025-08-09 12:30:00';
-  matchweek_start timestamp;
-  matchweek_start2 timestamp;
-
-  slot_day    int[]   := ARRAY[0,0,0,0,0,0, 1,1,1, 2];
-  slot_hour   int[]   := ARRAY[12,15,15,15,15,17, 12,14,16, 20];
-  slot_minute int[]   := ARRAY[30, 0, 0, 0, 0,30,  0,30,30,  0];
-
+  slot_day    int[] := ARRAY[0,0,0,0,0,0, 1,1,1, 2];
+  slot_hour   int[] := ARRAY[12,15,15,15,15,17, 12,14,16, 20];
+  slot_minute int[] := ARRAY[30, 0, 0, 0, 0,30,  0,30,30,  0];
   slot_idx int;
+
   home_id int;
   away_id int;
 
-  tmp int;
 BEGIN
   SELECT array_agg(id ORDER BY short_name) INTO team_ids FROM teams;
-  n := COALESCE(array_length(team_ids,1), 0);
-
+  n := COALESCE(array_length(team_ids, 1), 0);
   IF n <> 20 THEN
-    RAISE EXCEPTION 'Expected 20 teams, found % (insert all teams first)', n;
+    RAISE EXCEPTION 'Expected 20 teams, found %', n;
   END IF;
 
-  rounds := n - 1;
-  half   := n / 2;
+  half := n / 2;
+  a := team_ids;
 
-  left_ids  := team_ids[1:half];
-  right_ids := team_ids[half+1:n];
-
-  -- first half
-  FOR r IN 0..(rounds-1) LOOP
+  -- FIRST HALF
+  FOR r IN 0..(n-2) LOOP
     slot_idx := 1;
-    matchweek_start := season_start + (r * interval '7 days');
+    mw_start := season_start + (r * interval '7 days');
 
     FOR i IN 1..half LOOP
-      home_id := left_ids[i];
-      away_id := right_ids[half - i + 1];
+      home_id := a[i];
+      away_id := a[n - i + 1];
 
       INSERT INTO matches (home_team_id, away_team_id, kickoff, venue, status)
       VALUES (
         home_id,
         away_id,
-        (date_trunc('day', matchweek_start)
+        (date_trunc('day', mw_start)
            + make_interval(days => slot_day[slot_idx],
                            hours => slot_hour[slot_idx],
                            mins  => slot_minute[slot_idx])),
         'TBC',
         'SCHEDULED'
-      );
+      )
+      ON CONFLICT ON CONSTRAINT ux_match_unique_pair_time DO NOTHING;
 
       slot_idx := slot_idx + 1;
     END LOOP;
 
-    IF half > 1 THEN
-      tmp := left_ids[2];
-      left_ids[2] := right_ids[1];
-      FOR i IN 1..(half-1) LOOP
-        right_ids[i] := right_ids[i+1];
-      END LOOP;
-      right_ids[half] := tmp;
-    END IF;
+    a := ARRAY[a[1], a[n]] || a[2:n-1];
   END LOOP;
 
-  -- second half (reverse home/away)
-  left_ids  := team_ids[1:half];
-  right_ids := team_ids[half+1:n];
+  a := team_ids;
 
-  FOR r IN 0..(rounds-1) LOOP
+  FOR r IN 0..(n-2) LOOP
     slot_idx := 1;
-    matchweek_start2 := season_start + ((r + rounds) * interval '7 days');
+    mw_start2 := season_start + ((r + (n - 1)) * interval '7 days');
 
     FOR i IN 1..half LOOP
-      home_id := right_ids[half - i + 1];
-      away_id := left_ids[i];
+      home_id := a[n - i + 1];
+      away_id := a[i];
 
       INSERT INTO matches (home_team_id, away_team_id, kickoff, venue, status)
       VALUES (
         home_id,
         away_id,
-        (date_trunc('day', matchweek_start2)
+        (date_trunc('day', mw_start2)
            + make_interval(days => slot_day[slot_idx],
                            hours => slot_hour[slot_idx],
                            mins  => slot_minute[slot_idx])),
         'TBC',
         'SCHEDULED'
-      );
+      )
+      ON CONFLICT ON CONSTRAINT ux_match_unique_pair_time DO NOTHING;
 
       slot_idx := slot_idx + 1;
     END LOOP;
 
-    IF half > 1 THEN
-      tmp := left_ids[2];
-      left_ids[2] := right_ids[1];
-      FOR i IN 1..(half-1) LOOP
-        right_ids[i] := right_ids[i+1];
-      END LOOP;
-      right_ids[half] := tmp;
-    END IF;
+    a := ARRAY[a[1], a[n]] || a[2:n-1];
   END LOOP;
 
-  RAISE NOTICE 'Fixtures generated: % matches', (SELECT count(*) FROM matches);
+  RAISE NOTICE 'Fixtures now in matches: %', (SELECT COUNT(*) FROM matches);
 END
 $do$ LANGUAGE plpgsql
 @@
+

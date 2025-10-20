@@ -8,14 +8,10 @@ group = 'app.premierleague'
 version = '0.0.1-SNAPSHOT'
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
 }
 
-repositories {
-    mavenCentral()
-}
+repositories { mavenCentral() }
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -23,13 +19,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
-    // --- SOAP + JAXB (added) ---
     implementation 'org.springframework.boot:spring-boot-starter-web-services'
     implementation 'org.glassfish.jaxb:jaxb-runtime:4.0.5'
     implementation 'wsdl4j:wsdl4j:1.6.3'
 
     runtimeOnly 'org.postgresql:postgresql:42.7.4'
-
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -41,72 +35,57 @@ tasks.withType(JavaCompile).configureEach {
 
 sourceSets {
     main {
-        resources {
-            srcDirs = ['src/main/resources', 'initdb']
-        }
-        // include generated JAXB sources
-        java {
-            srcDirs += ["$buildDir/generated-sources/jaxb"]
-        }
+        resources { srcDirs = ['src/main/resources', 'initdb'] }
+        java { srcDirs += ["$buildDir/generated-sources/jaxb"] }
     }
 }
 
-// --- XJC code generation ---
-configurations {
-    jaxb
-}
-dependencies {
-    jaxb 'org.glassfish.jaxb:jaxb-xjc:4.0.5'
-}
+configurations { jaxb }
+dependencies { jaxb 'org.glassfish.jaxb:jaxb-xjc:4.0.5' }
 
 tasks.register('xjc') {
     group = 'build'
     description = 'Generate JAXB classes from XSD'
 
-    // Where your schema lives
     def schemaDir = file('src/main/resources')
+    def schemaFile = file('src/main/resources/matches.xsd')
     def outDir = file("$buildDir/generated-sources/jaxb")
 
-    inputs.dir(schemaDir)
+    inputs.files(schemaFile)
     outputs.dir(outDir)
 
     doLast {
-        if (!schemaDir.exists()) {
-            throw new GradleException("XSD folder not found: ${schemaDir}")
-        }
-        def schemaFile = file('src/main/resources/matches.xsd')
-        if (!schemaFile.exists()) {
-            throw new GradleException("XSD file not found: ${schemaFile}")
-        }
-
+        if (!schemaFile.exists()) throw new GradleException("XSD not found: ${schemaFile}")
         outDir.mkdirs()
-
-        ant.taskdef(
-            name: 'xjc',
-            classname: 'com.sun.tools.xjc.XJCTask',
-            classpath: configurations.jaxb.asPath
-        )
-
-        // Use dir/includes form (avoids Windows URI quirks)
-        ant.xjc(
-            destdir: outDir,
-            package: 'app.premierleague.ws',
-            extension: true
-        ) {
+        ant.taskdef(name: 'xjc', classname: 'com.sun.tools.xjc.XJCTask', classpath: configurations.jaxb.asPath)
+        ant.xjc(destdir: outDir, package: 'app.premierleague.ws', extension: true) {
             schema(dir: schemaDir, includes: 'matches.xsd')
         }
     }
 }
 
-tasks.named('compileJava') {
-    dependsOn tasks.named('xjc')
+tasks.named('compileJava') { dependsOn tasks.named('xjc') }
+
+tasks.register('submitOne', JavaExec) {
+    group = 'application'
+    description = 'Submit one match result via SOAP'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'app.premierleague.cli.SubmitResultCli'
+
+    standardInput = System.in
+
+    systemProperty 'endpoint', project.findProperty('endpoint') ?: 'http://localhost:8080/ws'
+    if (project.hasProperty('teamsUrl')) {
+        systemProperty 'teamsUrl', project.property('teamsUrl')
+    }
+
+    if (project.hasProperty('homeName')) systemProperty 'homeName', project.property('homeName')
+    if (project.hasProperty('awayName')) systemProperty 'awayName', project.property('awayName')
+    if (project.hasProperty('home'))     systemProperty 'home',     project.property('home')
+    if (project.hasProperty('away'))     systemProperty 'away',     project.property('away')
 }
 
-// Make sure generated sources are compiled
-sourceSets {
-    main {
-        java {
-            srcDirs += ["$buildDir/generated-sources/jaxb"]
-        }
-    }
+bootRun {
+    jvmArgs "-Dspring.devtools.restart.enabled=false"
 }
+

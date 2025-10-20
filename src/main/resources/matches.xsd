@@ -4,7 +4,6 @@
            targetNamespace="http://pltracker.com/match"
            elementFormDefault="qualified">
 
-  <!-- Request: update the score for an existing DB match -->
   <xs:element name="recordResultRequest">
     <xs:complexType>
       <xs:sequence>
@@ -15,8 +14,30 @@
     </xs:complexType>
   </xs:element>
 
-  <!-- Response: echo back the updated match id + status -->
   <xs:element name="recordResultResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="updatedId" type="xs:long"/>
+        <xs:element name="status" type="xs:string"/>
+        <xs:element name="homeScore" type="xs:int"/>
+        <xs:element name="awayScore" type="xs:int"/>
+        <xs:element name="message" type="xs:string" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="recordResultByTeamsRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="homeTeamId" type="xs:long"/>
+        <xs:element name="awayTeamId" type="xs:long"/>
+        <xs:element name="homeScore" type="xs:int"/>
+        <xs:element name="awayScore" type="xs:int"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="recordResultByTeamsResponse">
     <xs:complexType>
       <xs:sequence>
         <xs:element name="updatedId" type="xs:long"/>

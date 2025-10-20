@@ -1,4 +1,3 @@
-// src/main/java/app/premierleague/endpoint/WsConfig.java
 package app.premierleague.endpoint;
 
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
@@ -28,11 +27,9 @@ public class WsConfig {
 
   @Bean
   public XsdSchema matchesSchema() {
-    // Your XSD is at src/main/resources/matches.xsd
     return new SimpleXsdSchema(new ClassPathResource("matches.xsd"));
   }
 
-  // Expose WSDL at /ws/matches.wsdl
   @Bean(name = "matches")
   public DefaultWsdl11Definition defaultWsdl11Definition(XsdSchema matchesSchema) {
     DefaultWsdl11Definition def = new DefaultWsdl11Definition();
@@ -46,7 +43,6 @@ public class WsConfig {
   @Bean
   public Jaxb2Marshaller marshaller() {
     Jaxb2Marshaller m = new Jaxb2Marshaller();
-    // Must match the 'package' you configured in the Gradle xjc task
     m.setContextPath("app.premierleague.ws");
     return m;
   }

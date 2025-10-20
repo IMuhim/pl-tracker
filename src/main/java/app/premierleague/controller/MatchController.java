@@ -21,4 +21,10 @@ public class MatchController {
   public List<Match> fixtures() {
     return repo.findByStatusOrderByKickoffAsc("SCHEDULED");
   }
+
+  @GetMapping("/teams/{teamId}/fixtures")
+  public List<Match> fixturesForTeam(@PathVariable Integer teamId,
+                                     @RequestParam(required = false) String status) {
+    return repo.findTeamMatches(teamId, status);
+  }
 }

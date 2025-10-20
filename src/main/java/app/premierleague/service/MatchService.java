@@ -6,7 +6,6 @@ import jakarta.transaction.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.time.OffsetDateTime;
 
 @Service
@@ -20,7 +19,6 @@ public class MatchService {
     this.jdbc = jdbc;
   }
 
-  // === NEW: called by SOAP createMatchRequest ===
   @Transactional
   public Match saveFromSoap(long homeTeamId,
                             long awayTeamId,
@@ -31,9 +29,8 @@ public class MatchService {
                             String status) {
 
     Match m = new Match();
-    m.setHomeTeamId((int) homeTeamId);  // entity uses Integer
+    m.setHomeTeamId((int) homeTeamId);
     m.setAwayTeamId((int) awayTeamId);
-    // entity uses Instant; SOAP gives dateTime -> mapped by endpoint to OffsetDateTime
     m.setKickoff(kickoff.toInstant());
     m.setVenue(venue);
     m.setHomeGoals(homeGoals);
@@ -42,20 +39,17 @@ public class MatchService {
 
     Match saved = matchRepo.saveAndFlush(m);
 
-    // If you only want standings after FT, guard this:
     if ("FT".equalsIgnoreCase(saved.getStatus())) {
       recomputeStandings();
     }
     return saved;
   }
 
-  // === OPTIONAL: if your SOAP getMatchRequest queries by homeTeamId ===
   @Transactional
   public java.util.List<Match> findByHomeTeamId(long homeTeamId) {
     return matchRepo.findByHomeTeamIdOrderByKickoffAsc((int) homeTeamId);
   }
 
-  // === EXISTING ===
   @Transactional
   public Match recordResult(long matchId, int homeGoals, int awayGoals) {
     if (homeGoals < 0 || awayGoals < 0) throw new IllegalArgumentException("Scores must be ≥ 0");
@@ -68,10 +62,30 @@ public class MatchService {
     m.setStatus("FT");
 
     matchRepo.saveAndFlush(m);
-
     recomputeStandings();
     return m;
   }
+
+@Transactional
+public Match recordResultByTeams(int homeTeamId, int awayTeamId, int homeGoals, int awayGoals) {
+  if (homeGoals < 0 || awayGoals < 0) throw new IllegalArgumentException("Scores must be ≥ 0");
+
+  var matches = matchRepo.findByHomeTeamIdAndAwayTeamIdAndStatusNotOrderByKickoffAsc(homeTeamId, awayTeamId, "FT");
+  if (matches.isEmpty()) {
+    throw new IllegalArgumentException(
+        "No pending fixture found for home=" + homeTeamId + " away=" + awayTeamId + " (all played or not scheduled)");
+  }
+  var m = matches.get(0);
+
+  m.setHomeGoals(homeGoals);
+  m.setAwayGoals(awayGoals);
+  m.setStatus("FT");
+
+  matchRepo.saveAndFlush(m);
+  recomputeStandings();
+  return m;
+}
+
 
   @Transactional
   public void recomputeStandings() {

@@ -28,13 +28,13 @@ function buildTeamMap(teams){
 
 function normalizeMatch(m){
   return {
-    id: m.id,
-    homeId: String(m.homeTeamId ?? m.home_team_id ?? m.homeId),
-    awayId: String(m.awayTeamId ?? m.away_team_id ?? m.awayId),
+    id: m.id ?? m.matchId ?? m.match_id,
+    homeId: String(m.homeId ?? m.homeTeamId ?? m.home_team_id),
+    awayId: String(m.awayId ?? m.awayTeamId ?? m.away_team_id),
     homeGoals: Number(m.homeGoals ?? m.home_goals ?? 0),
     awayGoals: Number(m.awayGoals ?? m.away_goals ?? 0),
     status: String(m.status ?? 'SCHEDULED').trim().toUpperCase(),
-    kickoff: m.kickoff ?? m.kickoff_at ?? m.date
+    kickoff: m.kickoff ?? m.kickoff_at ?? m.date ?? null
   };
 }
 
@@ -85,7 +85,8 @@ function gameRow(teamId, m, teamMap){
   const opponent = teamMap.get(opponentId) ?? `Team ${opponentId}`;
   const teamGoals = isHome ? m.homeGoals : m.awayGoals;
   const oppGoals  = isHome ? m.awayGoals : m.homeGoals;
-  const score = `${teamGoals} - ${oppGoals}`;
+
+  const score = (m.status === 'FT') ? `${teamGoals} - ${oppGoals}` : '0 - 0';
 
   let result = '—';
   if (m.status === 'FT') {
@@ -103,16 +104,66 @@ function gameRow(teamId, m, teamMap){
   `;
 }
 
-function renderTeamGames(teamId, matches, teamMap){
-  const items = matches.map(normalizeMatch)
-    .filter(m => m.homeId === teamId || m.awayId === teamId)
-    .sort((a,b)=> new Date(a.kickoff) - new Date(b.kickoff));
-  els.gamesBody.innerHTML = items.map(m => gameRow(teamId, m, teamMap)).join('');
-}
-
 function esc(s){
   return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[ch]));
 }
+
+
+async function loadFixturesForTeam(teamId, globalMatches){
+  try {
+    const dto = await jget(`/teams/${teamId}/fixtures`);
+    if (Array.isArray(dto) && dto.length && ('opponent' in dto[0] || 'homeTeamId' in dto[0] || 'home_team_id' in dto[0])) {
+      if ('opponent' in dto[0]) {
+        return dto.map(x => ({
+          id: x.id ?? x.matchId ?? x.match_id ?? undefined,
+          homeId: x.home === true ? String(teamId) : 'OPP',
+          awayId: x.home === true ? 'OPP' : String(teamId),
+          homeGoals: x.home === true ? Number(x.goalsFor ?? 0) : Number(x.goalsAgainst ?? 0),
+          awayGoals: x.home === true ? Number(x.goalsAgainst ?? 0) : Number(x.goalsFor ?? 0),
+          status: String(x.status ?? 'SCHEDULED').trim().toUpperCase(),
+          kickoff: x.kickoff ?? null,
+          _opponentName: x.opponent
+        }));
+      }
+      return dto.map(normalizeMatch);
+    }
+  } catch {/* ignore and try fallbacks */}
+
+  try {
+    const q = await jget(`/matches?teamId=${teamId}&includeFT=true`);
+    if (Array.isArray(q) && q.length) return q.map(normalizeMatch);
+  } catch {/* ignore */}
+
+  return globalMatches.map(normalizeMatch)
+    .filter(m => m.homeId === String(teamId) || m.awayId === String(teamId));
+}
+
+function renderTeamGamesFromList(teamId, items, teamMap){
+  items.sort((a,b)=> new Date(a.kickoff || 0) - new Date(b.kickoff || 0));
+  const rows = items.map(m => {
+    if (m._opponentName) {
+      const teamGoals = (m.homeId === String(teamId)) ? m.homeGoals : m.awayGoals;
+      const oppGoals  = (m.homeId === String(teamId)) ? m.awayGoals : m.homeGoals;
+      const score = (m.status === 'FT') ? `${teamGoals} - ${oppGoals}` : '0 - 0';
+      let result = '—';
+      if (m.status === 'FT') {
+        if (teamGoals > oppGoals) result = 'Win';
+        else if (teamGoals < oppGoals) result = 'Loss';
+        else result = 'Draw';
+      }
+      return `
+        <tr>
+          <td>${esc(m._opponentName)}</td>
+          <td class="right mono">${score}</td>
+          <td class="right">${result}</td>
+        </tr>
+      `;
+    }
+    return gameRow(String(teamId), m, teamMap);
+  }).join('');
+  els.gamesBody.innerHTML = rows;
+}
+
 
 async function main(){
   els.standingsBody = document.querySelector('#standingsTable tbody');
@@ -154,10 +205,14 @@ async function main(){
     const initialTeamId = sortedTeams[0]?.id;
     if (initialTeamId) {
       els.teamSelect.value = initialTeamId;
-      renderTeamGames(initialTeamId, matches, teamMap);
+      const fixtures = await loadFixturesForTeam(initialTeamId, matches);
+      renderTeamGamesFromList(initialTeamId, fixtures, teamMap);
     }
-    els.teamSelect.addEventListener('change', () => {
-      renderTeamGames(els.teamSelect.value, matches, teamMap);
+
+    els.teamSelect.addEventListener('change', async () => {
+      const teamId = els.teamSelect.value;
+      const fixtures = await loadFixturesForTeam(teamId, matches);
+      renderTeamGamesFromList(teamId, fixtures, teamMap);
     });
 
   } catch (e){
