@@ -1,5 +1,3 @@
-DROP TABLE IF EXISTS standings CASCADE
-@@
 DROP TABLE IF EXISTS events CASCADE
 @@
 DROP TABLE IF EXISTS matches CASCADE
@@ -54,7 +52,7 @@ ALTER TABLE matches
   EXCLUDE USING gist (away_team_id WITH =, kickoff WITH =)
 @@
 
-CREATE TABLE standings (
+CREATE TABLE IF NOT EXISTS standings (
   team_id INT PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
   played  INT NOT NULL DEFAULT 0,
   won     INT NOT NULL DEFAULT 0,
