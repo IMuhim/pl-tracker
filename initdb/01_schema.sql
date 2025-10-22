@@ -13,7 +13,8 @@ CREATE TABLE teams (
   name        VARCHAR(100) NOT NULL UNIQUE,
   short_name  VARCHAR(10)  NOT NULL UNIQUE,
   city        VARCHAR(100),
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  owner VARCHAR(120)
 )
 @@
 

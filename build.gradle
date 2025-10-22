@@ -68,24 +68,28 @@ tasks.named('compileJava') { dependsOn tasks.named('xjc') }
 
 tasks.register('submitOne', JavaExec) {
     group = 'application'
-    description = 'Submit one match result via SOAP'
+    description = 'Submit one match result via SOAP / or REST actions'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'app.premierleague.cli.SubmitResultCli'
 
     standardInput = System.in
 
-    systemProperty 'endpoint', project.findProperty('endpoint') ?: 'http://localhost:8080/ws'
-    if (project.hasProperty('teamsUrl')) {
-        systemProperty 'teamsUrl', project.property('teamsUrl')
+    systemProperty 'endpoint', (project.findProperty('endpoint') ?: System.getProperty('endpoint') ?: 'http://localhost:8080/ws')
+
+    def keys = [
+        'action','home','away','kickoff','venue','teamsUrl','matchesUrl','team','owner','matchId',
+        'homeName','awayName'
+    ]
+
+    keys.each { key ->
+        def sysVal = System.getProperty(key)
+        if (sysVal != null) {
+            systemProperty key, sysVal
+        } else if (project.hasProperty(key)) {
+            if (key == 'owner' && project.property('owner') instanceof org.gradle.api.Project) {
+            } else {
+                systemProperty key, project.property(key)
+            }
+        }
     }
-
-    if (project.hasProperty('homeName')) systemProperty 'homeName', project.property('homeName')
-    if (project.hasProperty('awayName')) systemProperty 'awayName', project.property('awayName')
-    if (project.hasProperty('home'))     systemProperty 'home',     project.property('home')
-    if (project.hasProperty('away'))     systemProperty 'away',     project.property('away')
 }
-
-bootRun {
-    jvmArgs "-Dspring.devtools.restart.enabled=false"
-}
-
