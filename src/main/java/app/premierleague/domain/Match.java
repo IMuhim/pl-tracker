@@ -3,6 +3,7 @@ package app.premierleague.domain;
 import jakarta.persistence.*;
 import java.time.Instant;
 
+// Stores team ids, kickoff time, goals and status
 @Entity
 @Table(name = "matches")
 public class Match {

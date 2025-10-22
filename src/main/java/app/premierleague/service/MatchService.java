@@ -19,6 +19,7 @@ public class MatchService {
     this.jdbc = jdbc;
   }
 
+  // Save matches from using SOAP
   @Transactional
   public Match saveFromSoap(long homeTeamId,
                             long awayTeamId,
@@ -39,12 +40,14 @@ public class MatchService {
 
     Match saved = matchRepo.saveAndFlush(m);
 
+    // When game ends the table is updated
     if ("FT".equalsIgnoreCase(saved.getStatus())) {
       recomputeStandings();
     }
     return saved;
   }
 
+  // List of fixtures for a specific team
   @Transactional
   public java.util.List<Match> findByHomeTeamId(long homeTeamId) {
     return matchRepo.findByHomeTeamIdOrderByKickoffAsc((int) homeTeamId);
@@ -54,6 +57,7 @@ public class MatchService {
   public Match recordResult(long matchId, int homeGoals, int awayGoals) {
     if (homeGoals < 0 || awayGoals < 0) throw new IllegalArgumentException("Scores must be ≥ 0");
 
+    // Check to ensure match exists
     Match m = matchRepo.findById(matchId)
         .orElseThrow(() -> new IllegalArgumentException("Match not found: " + matchId));
 
@@ -66,10 +70,12 @@ public class MatchService {
     return m;
   }
 
+// Records the result for a fixture
 @Transactional
 public Match recordResultByTeams(int homeTeamId, int awayTeamId, int homeGoals, int awayGoals) {
   if (homeGoals < 0 || awayGoals < 0) throw new IllegalArgumentException("Scores must be ≥ 0");
 
+  // Ensures the fixture has not already been played and once the game is played the table is updated
   var matches = matchRepo.findByHomeTeamIdAndAwayTeamIdAndStatusNotOrderByKickoffAsc(homeTeamId, awayTeamId, "FT");
   if (matches.isEmpty()) {
     throw new IllegalArgumentException(
@@ -86,7 +92,8 @@ public Match recordResultByTeams(int homeTeamId, int awayTeamId, int homeGoals, 
   return m;
 }
 
-
+  
+  // Calculates the standings by adding home and away games
   @Transactional
   public void recomputeStandings() {
     jdbc.update("DELETE FROM standings");

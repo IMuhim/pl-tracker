@@ -10,6 +10,8 @@ import org.springframework.ws.server.endpoint.annotation.PayloadRoot;
 import org.springframework.ws.server.endpoint.annotation.RequestPayload;
 import org.springframework.ws.server.endpoint.annotation.ResponsePayload;
 
+// Class is a SOAP endpoint that requests to MatchService adn returns SOAP responses
+// Updates the matches
 @Endpoint
 public class MatchesEndpoint {
 

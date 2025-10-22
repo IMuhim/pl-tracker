@@ -2,6 +2,7 @@ package app.premierleague.domain;
 
 import jakarta.persistence.*;
 
+// Built using MatchService.recomputeStandigns()
 @Entity @Table(name="standings")
 public class Standing {
   @Id @Column(name="team_id") private Integer teamId;

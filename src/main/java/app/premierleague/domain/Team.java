@@ -2,6 +2,7 @@ package app.premierleague.domain;
 
 import jakarta.persistence.*;
 
+// Stores information about teams
 @Entity
 @Table(name = "teams")
 public class Team {

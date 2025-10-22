@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
+// Filter teams and look for next non-played fixture
 public interface MatchRepository extends JpaRepository<Match, Long> {
   List<Match> findAllByOrderByKickoffAsc();
   List<Match> findByStatusOrderByKickoffAsc(String status);
