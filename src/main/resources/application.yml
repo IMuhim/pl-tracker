@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/pl_tracker
+    url: jdbc:postgresql://localhost:5541/pl_tracker_v1
     username: pl_user
     password: pl_pass
   jpa:
