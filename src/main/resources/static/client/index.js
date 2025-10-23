@@ -110,9 +110,15 @@ function esc(s){
 
 
 async function loadFixturesForTeam(teamId, globalMatches){
+  // 1) Prefer the server’s filtered endpoint
   try {
-    const dto = await jget(`/teams/${teamId}/fixtures`);
-    if (Array.isArray(dto) && dto.length && ('opponent' in dto[0] || 'homeTeamId' in dto[0] || 'home_team_id' in dto[0])) {
+    const dto = await jget(`/teams/${teamId}/fixtures?status=FT`);  // <-- add status=FT
+    if (Array.isArray(dto) && dto.length) {
+      // If your API returns plain matches:
+      if ('homeTeamId' in dto[0] || 'home_team_id' in dto[0]) {
+        return dto.map(normalizeMatch);
+      }
+      // If it returns a custom shape with "opponent" (older DTOs)
       if ('opponent' in dto[0]) {
         return dto.map(x => ({
           id: x.id ?? x.matchId ?? x.match_id ?? undefined,
@@ -120,30 +126,32 @@ async function loadFixturesForTeam(teamId, globalMatches){
           awayId: x.home === true ? 'OPP' : String(teamId),
           homeGoals: x.home === true ? Number(x.goalsFor ?? 0) : Number(x.goalsAgainst ?? 0),
           awayGoals: x.home === true ? Number(x.goalsAgainst ?? 0) : Number(x.goalsFor ?? 0),
-          status: String(x.status ?? 'SCHEDULED').trim().toUpperCase(),
+          status: String(x.status ?? 'FT').trim().toUpperCase(),
           kickoff: x.kickoff ?? null,
           _opponentName: x.opponent
         }));
       }
-      return dto.map(normalizeMatch);
     }
-  } catch {/* ignore and try fallbacks */}
+  } catch { /* fall through to fallback */ }
 
-  try {
-    const q = await jget(`/matches?teamId=${teamId}&includeFT=true`);
-    if (Array.isArray(q) && q.length) return q.map(normalizeMatch);
-  } catch {/* ignore */}
-
-  return globalMatches.map(normalizeMatch)
-    .filter(m => m.homeId === String(teamId) || m.awayId === String(teamId));
+  // 2) Fallback: filter from the global match list we already loaded
+  return globalMatches
+    .map(normalizeMatch)
+    .filter(m =>
+      (m.homeId === String(teamId) || m.awayId === String(teamId)) &&
+      m.status === 'FT'
+    );
 }
 
+
 function renderTeamGamesFromList(teamId, items, teamMap){
+  const tid = String(teamId); // normalize
   items.sort((a,b)=> new Date(a.kickoff || 0) - new Date(b.kickoff || 0));
+
   const rows = items.map(m => {
     if (m._opponentName) {
-      const teamGoals = (m.homeId === String(teamId)) ? m.homeGoals : m.awayGoals;
-      const oppGoals  = (m.homeId === String(teamId)) ? m.awayGoals : m.homeGoals;
+      const teamGoals = (m.homeId === tid) ? m.homeGoals : m.awayGoals;
+      const oppGoals  = (m.homeId === tid) ? m.awayGoals : m.homeGoals;
       const score = (m.status === 'FT') ? `${teamGoals} - ${oppGoals}` : '0 - 0';
       let result = '—';
       if (m.status === 'FT') {
@@ -159,11 +167,15 @@ function renderTeamGamesFromList(teamId, items, teamMap){
         </tr>
       `;
     }
-    return gameRow(String(teamId), m, teamMap);
+    return gameRow(tid, m, teamMap);
   }).join('');
-  els.gamesBody.innerHTML = rows;
-}
 
+  els.gamesBody.innerHTML = rows || `
+    <tr>
+      <td colspan="3" class="right" style="text-align:center; opacity:.7">No past games</td>
+    </tr>
+  `;
+}
 
 async function main(){
   els.standingsBody = document.querySelector('#standingsTable tbody');
@@ -176,41 +188,32 @@ async function main(){
       jget('/teams'),
       jget('/matches')
     ]);
+
     const teamMap = buildTeamMap(teams);
 
-    const sortedTeams = [...teamMap.entries()].map(([id,name]) => ({id, name}))
+    // Populate dropdown (alphabetical)
+    const sortedTeams = [...teamMap.entries()]
+      .map(([id,name]) => ({ id: String(id), name }))
       .sort((a,b)=> a.name.localeCompare(b.name));
-    els.teamSelect.innerHTML = sortedTeams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+    els.teamSelect.innerHTML = sortedTeams
+      .map(t => `<option value="${t.id}">${esc(t.name)}</option>`)
+      .join('');
 
-    let standings;
-    try {
-      const apiRows = await jget('/table');
-      standings = apiRows.map(r => ({
-        teamId: String(r.teamId ?? r.team_id ?? r.id),
-        team:   r.team ?? r.name ?? teamMap.get(String(r.teamId ?? r.team_id ?? r.id)) ?? 'Team',
-        p:  r.p   ?? r.played        ?? r.playedGames ?? 0,
-        w:  r.w   ?? r.won           ?? 0,
-        d:  r.d   ?? r.draw          ?? 0,
-        l:  r.l   ?? r.lost          ?? 0,
-        gf: r.gf  ?? r.goalsFor      ?? 0,
-        ga: r.ga  ?? r.goalsAgainst  ?? 0,
-        gd: r.gd  ?? ((r.gf ?? 0) - (r.ga ?? 0)),
-        pts:r.pts ?? r.points        ?? 0
-      }));
-    } catch {
-      standings = computeStandings(matches, teamMap);
-    }
+    // ALWAYS compute standings from matches so it's never stale
+    const standings = computeStandings(matches, teamMap);
     renderStandings(standings);
 
-    const initialTeamId = sortedTeams[0]?.id;
+    // Initial render
+    const initialTeamId = String(sortedTeams[0]?.id || '');
     if (initialTeamId) {
       els.teamSelect.value = initialTeamId;
       const fixtures = await loadFixturesForTeam(initialTeamId, matches);
       renderTeamGamesFromList(initialTeamId, fixtures, teamMap);
     }
 
+    // On change
     els.teamSelect.addEventListener('change', async () => {
-      const teamId = els.teamSelect.value;
+      const teamId = String(els.teamSelect.value);
       const fixtures = await loadFixturesForTeam(teamId, matches);
       renderTeamGamesFromList(teamId, fixtures, teamMap);
     });
