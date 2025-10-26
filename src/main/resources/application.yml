@@ -11,7 +11,7 @@ spring:
       hibernate.format_sql: true
   sql:
     init:
-      mode: never
+      mode: always
       schema-locations: classpath:01_schema.sql
       data-locations: classpath:02_seed.sql
       separator: "@@"
